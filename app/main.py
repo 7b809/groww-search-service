@@ -18,12 +18,11 @@ testing_flag = True
 # CORS Configuration
 # -----------------------------
 
-origins = settings.CORS_ORIGINS if testing_flag else ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
