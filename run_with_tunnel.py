@@ -6,7 +6,42 @@ import sys
 import socket
 import platform
 import os
+import requests
+from dotenv import load_dotenv
 
+load_dotenv()
+
+
+def save_wss_to_vercel(wss_url: str):
+    """
+    Loads Vercel URL from ENV
+    Sends POST request to /save endpoint
+    Saves WSS URL as message_content
+    """
+
+    base_url = os.getenv("VERCEL_BASE_URL")
+
+    if not base_url:
+        raise ValueError("VERCEL_BASE_URL not found in environment variables")
+
+    endpoint = f"{base_url}/save"
+
+    payload = {
+        "message_content": wss_url
+    }
+
+    try:
+        response = requests.post(endpoint, json=payload, timeout=10)
+        response.raise_for_status()
+
+        print("✅ Saved to Vercel successfully")
+        print("Response:", response.json())
+
+        return response.json()
+
+    except requests.exceptions.RequestException as e:
+        print("❌ Failed to save to Vercel:", str(e))
+        return None
 
 # ==========================================================
 # Detect Free Port Automatically
@@ -103,6 +138,10 @@ def start_tunnel(port):
 
                 print("\n✅ Public URL Ready:")
                 print(public_url)
+
+                wss_url = public_url.replace("https", "wss") + "/ws/option"
+
+                save_wss_to_vercel(wss_url)
 
                 print("\n🔌 WebSocket Base URL:")
                 print(public_url.replace("https", "wss") + "/ws/option")
