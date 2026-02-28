@@ -12,29 +12,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def save_wss_to_vercel(wss_url: str):
-    """
-    Loads Vercel URL from ENV
-    Sends POST request to /save endpoint
-    Saves WSS URL as message_content
-    """
-
+def save_wss_to_vercel_fixed(wss_url: str, serial: int = 88):
     base_url = os.getenv("VERCEL_BASE_URL")
 
     if not base_url:
         raise ValueError("VERCEL_BASE_URL not found in environment variables")
 
-    endpoint = f"{base_url}/save"
+    endpoint = f"{base_url}/update/{serial}"
 
     payload = {
         "message_content": wss_url
     }
 
     try:
-        response = requests.post(endpoint, json=payload, timeout=10)
+        response = requests.put(endpoint, json=payload, timeout=10)
         response.raise_for_status()
 
-        print("✅ Saved to Vercel successfully")
+        print(f"✅ WSS saved as serial {serial}")
         print("Response:", response.json())
 
         return response.json()
@@ -42,7 +36,7 @@ def save_wss_to_vercel(wss_url: str):
     except requests.exceptions.RequestException as e:
         print("❌ Failed to save to Vercel:", str(e))
         return None
-
+    
 # ==========================================================
 # Detect Free Port Automatically
 # ==========================================================
@@ -141,7 +135,7 @@ def start_tunnel(port):
 
                 wss_url = public_url.replace("https", "wss") + "/ws/option"
 
-                save_wss_to_vercel(wss_url)
+                save_wss_to_vercel_fixed(wss_url)
 
                 print("\n🔌 WebSocket Base URL:")
                 print(public_url.replace("https", "wss") + "/ws/option")
