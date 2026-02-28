@@ -1,54 +1,91 @@
 import subprocess
-import threading
 import time
 import re
 import shutil
-import signal
 import sys
+import socket
+import platform
+import os
 
-UVICORN_CMD = [
-    "uvicorn",
-    "app.main:app",
-    "--host", "0.0.0.0",
-    "--port", "8000"
-]
 
-CLOUDFLARED_BINARY = "./cloudflared"
-LOCAL_PORT = 8000
+# ==========================================================
+# Detect Free Port Automatically
+# ==========================================================
+def get_free_port():
+    s = socket.socket()
+    s.bind(('', 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+# ==========================================================
+# Detect OS and Set cloudflared Binary
+# ==========================================================
+def get_cloudflared_binary():
+    system = platform.system().lower()
+
+    if system == "windows":
+        return "cloudflared.exe"
+    else:
+        return "./cloudflared"
 
 
 # ==========================================================
 # Install cloudflared if missing
 # ==========================================================
 def install_cloudflared():
-    if not shutil.which("cloudflared") and not shutil.which("./cloudflared"):
+    system = platform.system().lower()
+
+    if system == "windows":
+        binary_name = "cloudflared.exe"
+        download_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+    else:
+        binary_name = "cloudflared"
+        download_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+
+    if not os.path.exists(binary_name):
         print("⏳ Installing cloudflared...\n")
-        subprocess.run([
-            "curl", "-L",
-            "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe",
-            "-o", "cloudflared.exe"
-        ], check=True)
+
+        subprocess.run(
+            ["curl", "-L", download_url, "-o", binary_name],
+            check=True
+        )
+
+        if system != "windows":
+            subprocess.run(["chmod", "+x", binary_name], check=True)
+
         print("✅ cloudflared installed.\n")
     else:
         print("✅ cloudflared already installed.\n")
 
 
 # ==========================================================
-# Start FastAPI
+# Start FastAPI on Dynamic Port
 # ==========================================================
-def start_fastapi():
-    print("🚀 Starting FastAPI...\n")
-    return subprocess.Popen(UVICORN_CMD)
+def start_fastapi(port):
+    print(f"🚀 Starting FastAPI on port {port}...\n")
+
+    uvicorn_cmd = [
+        "uvicorn",
+        "app.main:app",
+        "--host", "0.0.0.0",
+        "--port", str(port)
+    ]
+
+    return subprocess.Popen(uvicorn_cmd)
 
 
 # ==========================================================
 # Start Cloudflare Tunnel
 # ==========================================================
-def start_tunnel():
+def start_tunnel(port):
     print("🌍 Starting Cloudflare Tunnel...\n")
 
+    binary = get_cloudflared_binary()
+
     tunnel_proc = subprocess.Popen(
-        ["cloudflared", "tunnel", "--url", f"http://localhost:{LOCAL_PORT}"],
+        [binary, "tunnel", "--url", f"http://localhost:{port}"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True
@@ -63,10 +100,16 @@ def start_tunnel():
             match = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
             if match:
                 public_url = match.group(0)
+
                 print("\n✅ Public URL Ready:")
                 print(public_url)
-                print("\n🔌 WebSocket URL:")
-                print(public_url.replace("https", "wss") + "/ws/option/YOUR_SYMBOL")
+
+                print("\n🔌 WebSocket Base URL:")
+                print(public_url.replace("https", "wss") + "/ws/option")
+
+                print("\n📌 Example WebSocket:")
+                print(public_url.replace("https", "wss") + "/ws/option/NIFTY2630225400CE")
+
                 print("\n")
 
     return tunnel_proc
@@ -93,12 +136,14 @@ def shutdown(fastapi_proc, tunnel_proc):
 if __name__ == "__main__":
     install_cloudflared()
 
-    fastapi_proc = start_fastapi()
+    port = get_free_port()
 
-    # Wait 2 seconds to ensure server starts
-    time.sleep(2)
+    fastapi_proc = start_fastapi(port)
 
-    tunnel_proc = start_tunnel()
+    # wait briefly to allow server startup
+    time.sleep(3)
+
+    tunnel_proc = start_tunnel(port)
 
     try:
         tunnel_proc.wait()
