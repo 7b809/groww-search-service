@@ -1,4 +1,2 @@
-fastapi
-uvicorn
-httpx
-python-dotenv
+flask
+requests
